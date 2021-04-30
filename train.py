@@ -7,7 +7,7 @@ import torch
 
 import data
 from vocab import Vocabulary  # NOQA
-from model_rlrl_triplet_rebuttal_baseline  import VSRN
+from model_PG  import VSRN
 from evaluation import i2t, t2i, AverageMeter, LogCollector, encode_data
 import logging
 import tensorboard_logger as tb_logger
