@@ -38,16 +38,6 @@ wget https://scanproject.blob.core.windows.net/scan-data/data.zip
 
 You can also get the data from google drive: https://drive.google.com/drive/u/1/folders/1os1Kr7HeTbh8FajBNegW8rjJf6GIhFqC. We refer to the path of extracted files for `data.zip` as `$DATA_PATH`. 
 
-## Evaluate pre-trained models
-Modify the model_path and data_path in the evaluation_models.py file. Then Run `evaluation_models.py`:
-
-```bash
-python evaluation_models.py
-```
-
-To do cross-validation on MSCOCO 1K test set (5 folders average), pass `fold5=True`. Pass `fold5=False` for evaluation on MSCOCO 5K test set. Pretrained models for MSCOCO and Flickr30K can be downloaded from https://drive.google.com/file/d/1y8Ywa2vrPB7m_Q_Ku69z7EdwsLB9gsJW/view?usp=sharing 
-
-You can also use the following code to evaluate each single model on Flickr30K, MSCOCO 1K and MSCOCO 5K :
 
 ```python
 from vocab import Vocabulary
