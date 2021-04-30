@@ -39,13 +39,6 @@ wget https://scanproject.blob.core.windows.net/scan-data/data.zip
 You can also get the data from google drive: https://drive.google.com/drive/u/1/folders/1os1Kr7HeTbh8FajBNegW8rjJf6GIhFqC. We refer to the path of extracted files for `data.zip` as `$DATA_PATH`. 
 
 
-```python
-from vocab import Vocabulary
-import evaluation
-evaluation.evalrank("pretrain_model/flickr/model_fliker_1.pth.tar", data_path="$DATA_PATH", split="test", fold5=False)'
-evaluation.evalrank("pretrain_model/coco/model_coco_1.pth.tar", data_path="$DATA_PATH", split="testall", fold5=True)'
-evaluation.evalrank("pretrain_model/coco/model_coco_1.pth.tar", data_path="$DATA_PATH", split="testall", fold5=False)'
-```
 
 ## Training new models
 Run `train.py`:
