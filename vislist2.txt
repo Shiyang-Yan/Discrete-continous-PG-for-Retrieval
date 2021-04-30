@@ -1,0 +1,4 @@
+./vis/COCO_val2014_000000391895.jpg_0.png ./vis/COCO_val2014_000000169802.jpg_4.png ./vis/COCO_val2014_000000391895.jpg_0.png ./vis/COCO_val2014_000000060623.jpg_3.png
+./vis/COCO_val2014_000000060623.jpg_3.png ./vis/COCO_val2014_000000169802.jpg_4.png ./vis/COCO_val2014_000000391895.jpg_0.png ./vis/COCO_val2014_000000060623.jpg_3.png
+./vis/COCO_val2014_000000463640.jpg_22.png ./vis/COCO_val2014_000000546222.jpg_14.png ./vis/COCO_val2014_000000397041.jpg_2.png ./vis/COCO_val2014_000000463640.jpg_22.png
+./vis/COCO_val2014_000000376891.jpg_8.png ./vis/COCO_val2014_000000257965.jpg_26.png ./vis/COCO_val2014_000000050309.jpg_5.png ./vis/COCO_val2014_000000376891.jpg_8.png
