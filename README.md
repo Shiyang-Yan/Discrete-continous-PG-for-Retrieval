@@ -1,23 +1,18 @@
-# Visual Semantic Reasoning for Image-Text Matching (VSRN)
-PyTorch code for VSRN described in the paper "Visual Semantic Reasoning for Image-Text Matching". The paper will appear in ICCV 2019 as oral presentation. It is built on top of the [VSE++](https://github.com/fartashf/vsepp).
+# discrete-continuous action space policy gradient-based attention for image-text matching
+PyTorch code for VSRN described in the paper "discrete-continuous action space policy gradient-based attention for image-text matching". The paper will appear in CVPR 2021. It is built on top of the [VSRN](https://github.com/KunpengLi1994/VSRN).
 
-[Kunpeng Li](https://kunpengli1994.github.io/), [Yulun Zhang](http://yulunzhang.com/), [Kai Li](http://kailigo.github.io/), Yuanyuan Li and [Yun Fu](http://www1.ece.neu.edu/~yunfu/). "Visual Semantic Reasoning for Image-Text Matching", ICCV, 2019. [[pdf](https://arxiv.org/pdf/1909.02701.pdf)]
+discrete-continuous action space policy gradient-based attention for image-text matching https://arxiv.org/abs/2104.10406
 
 ## Introduction
-Image-text matching has been a hot research topic bridging the vision and language areas. It remains challenging because the current representation of image usually lacks global semantic concepts as in its corresponding text caption. To address this issue, we propose a simple and interpretable reasoning model to generate visual representation that captures key objects and semantic concepts of a scene. Specifically, we first build up connections between image regions and perform reasoning with Graph Convolutional Networks to generate features with semantic relationships. Then, we propose to use the gate and memory mechanism to perform global semantic reasoning on these relationship-enhanced features, select the discriminative information and gradually generate the representation for the whole scene. 
+Image-text matching is an important multi-modal task with massive applications. It tries to match the image and the text with similar semantic information. Existing approaches do not explicitly transform the different modalities into a common space. Meanwhile, the attention mechanism which is widely used in image-text matching models does not have supervision. We propose a novel attention scheme which projects the image and text embedding into a common space and optimises the attention weights directly towards the evaluation metrics. The proposed attention scheme can be considered as a kind of supervised attention and requiring no additional annotations. It is trained via a novel Discrete-continuous action space policy gradient algorithm, which is more effective in modelling complex action space than previous continuous action space policy gradient. We evaluate the proposed methods on two widely-used benchmark datasets: Flickr30k and MS-COCO, outperforming the previous approaches by a large margin.
 
-Experiments validate that our method achieves a new state-of-the-art for the image-text matching on MS-COCO and Flickr30K datasets. It outperforms the current best method SCAN by 6.8\% relatively for image retrieval and 4.8\% relatively for caption retrieval on MS-COCO (Recall@1 using 1K test set). On Flickr30K, our model improves image retrieval by 12.6\% relatively and caption retrieval by 5.8\% relatively (Recall@1). 
-
-Besides, since our method only relies on the simple inner product as the similarity function, it is quite efficient at the inference stage. It is around 30 times faster than the current best method SCAN when tested on MS-COCO 1K dataset.
-
-![model](/fig/model.png)
 
 ## Requirements 
 We recommended the following dependencies.
 
-* Python 2.7 
-* [PyTorch](http://pytorch.org/) (0.4.1)
-* [NumPy](http://www.numpy.org/) (>1.12.1)
+* Python 3.8 
+* [PyTorch](http://pytorch.org/) 
+* [NumPy](http://www.numpy.org/) 
 * [TensorBoard](https://github.com/TeamHG-Memex/tensorboard_logger)
 * [pycocotools](https://github.com/cocodataset/cocoapi)
 * [torchvision]()
@@ -74,20 +69,8 @@ python train.py --data_path $DATA_PATH --data_name coco_precomp --logger_name ru
 For Flickr30K:
 
 ```bash
-python train.py --data_path $DATA_PATH --data_name f30k_precomp --logger_name runs/flickr_VSRN --max_violation --lr_update 10  --max_len 60
+python train.py 
 ```
-
-
-## Reference
-
-If you found this code useful, please cite the following paper:
-
-    @inproceedings{li2019vsrn,
-      title={Visual semantic reasoning for image-text matching},
-      author={Li, Kunpeng and Zhang, Yulun and Li, Kai and Li, Yuanyuan and Fu, Yun},
-      booktitle={ICCV},
-      year={2019}
-    }
 
 ## License
 
