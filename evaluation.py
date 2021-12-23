@@ -8,7 +8,7 @@ from data import get_test_loader
 import time
 import numpy as np
 from vocab import Vocabulary  # NOQA
-from model_rlrl_triplet_test_baseline import VSRN, order_sim
+from model_PG import VSRN, order_sim
 from collections import OrderedDict
 
 def l2norm(X):
