@@ -28,17 +28,19 @@ def eval_func(qf, gf, q_pids, g_pids, max_rank=50):
         Key: for each query identity, its gallery images from the same camera view are discarded.
         """
 
+    cosine = 0
     q_pids = torch.tensor(q_pids).int().cpu().numpy()
     g_pids = torch.tensor(g_pids).int().cpu().numpy()
     q_camids = np.ones(q_pids.shape[0])
     g_camids = np.zeros(q_pids.shape[0])
     m, n = qf.shape[0], gf.shape[0]
-    #distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
-    #          torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-    #distmat.addmm_(1, -2, qf, gf.t())
-    #distmat = distmat.cpu().numpy()
-    
-    distmat = qf.mm(gf.t())
+    if cosine = 0:
+        distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
+                  torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
+        distmat.addmm_(1, -2, qf, gf.t())
+        distmat = distmat.cpu().numpy()
+    else:
+        distmat = qf.mm(gf.t())
     
     num_q, num_g = distmat.shape
     if num_g < max_rank:
