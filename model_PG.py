@@ -34,7 +34,7 @@ def eval_func(qf, gf, q_pids, g_pids, max_rank=50):
     q_camids = np.ones(q_pids.shape[0])
     g_camids = np.zeros(q_pids.shape[0])
     m, n = qf.shape[0], gf.shape[0]
-    if cosine = 0:
+    if cosine == 0:
         distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
                   torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
         distmat.addmm_(1, -2, qf, gf.t())
