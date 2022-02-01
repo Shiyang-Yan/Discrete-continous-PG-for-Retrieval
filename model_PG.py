@@ -22,69 +22,6 @@ from models import DecoderRNN, EncoderRNN, S2VTAttModel, S2VTModel
 from torch import nn
 from torch.distributions import Normal
 
-class APLoss (nn.Module):
-    """ Differentiable AP loss, through quantization. From the paper:
-        Learning with Average Precision: Training Image Retrieval with a Listwise Loss
-        Jerome Revaud, Jon Almazan, Rafael Sampaio de Rezende, Cesar de Souza
-        https://arxiv.org/abs/1906.07589
-        Input: (N, M)   values in [min, max]
-        label: (N, M)   values in {0, 1}
-        Returns: 1 - mAP (mean AP for each n in {1..N})
-                 Note: typically, this is what you wanna minimize
-    """
-    def __init__(self, nq=25, min=0, max=1):
-        nn.Module.__init__(self)
-        assert isinstance(nq, int) and 2 <= nq <= 100
-        self.nq = nq
-        self.min = min
-        self.max = max
-        gap = max - min
-        assert gap > 0
-        # Initialize quantizer as non-trainable convolution
-        self.quantizer = q = nn.Conv1d(1, 2*nq, kernel_size=1, bias=True)
-        q.weight = nn.Parameter(q.weight.detach(), requires_grad=False)
-        q.bias = nn.Parameter(q.bias.detach(), requires_grad=False)
-        a = (nq-1) / gap
-        # First half equal to lines passing to (min+x,1) and (min+x+1/a,0) with x = {nq-1..0}*gap/(nq-1)
-        q.weight[:nq] = -a
-        q.bias[:nq] = torch.from_numpy(a*min + np.arange(nq, 0, -1))  # b = 1 + a*(min+x)
-        # First half equal to lines passing to (min+x,1) and (min+x-1/a,0) with x = {nq-1..0}*gap/(nq-1)
-        q.weight[nq:] = a
-        q.bias[nq:] = torch.from_numpy(np.arange(2-nq, 2, 1) - a*min)  # b = 1 - a*(min+x)
-        # First and last one as a horizontal straight line
-        q.weight[0] = q.weight[-1] = 0
-        q.bias[0] = q.bias[-1] = 1
-
-    def forward(self, x, label, qw=None, ret='1-mAP'):
-        assert x.shape == label.shape  # N x M
-        N, M = x.shape
-        # Quantize all predictions
-        q = self.quantizer(x.unsqueeze(1))
-        q = torch.min(q[:, :self.nq], q[:, self.nq:]).clamp(min=0)  # N x Q x M
-
-        nbs = q.sum(dim=-1)  # number of samples  N x Q = c
-        rec = (q * label.view(N, 1, M).float()).sum(dim=-1)  # number of correct samples = c+ N x Q
-        prec = rec.cumsum(dim=-1) / (1e-16 + nbs.cumsum(dim=-1))  # precision
-        rec /= rec.sum(dim=-1).unsqueeze(1)  # norm in [0,1]
-
-        ap = (prec * rec).sum(dim=-1)  # per-image AP
-
-        if ret == '1-mAP':
-            if qw is not None:
-                ap *= qw  # query weights
-            return 1 - ap.mean()
-        elif ret == 'AP':
-            assert qw is None
-            return ap
-        else:
-            raise ValueError("Bad return type for APLoss(): %s" % str(ret))
-
-    def measures(self, x, gt, loss=None):
-        if loss is None:
-            loss = self.forward(x, gt)
-        return {'loss_ap': float(loss)}
-
-
 
 def eval_func(qf, gf, q_pids, g_pids, max_rank=50):
     """Evaluation with market1501 metric
@@ -96,10 +33,13 @@ def eval_func(qf, gf, q_pids, g_pids, max_rank=50):
     q_camids = np.ones(q_pids.shape[0])
     g_camids = np.zeros(q_pids.shape[0])
     m, n = qf.shape[0], gf.shape[0]
-    distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
-              torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-    distmat.addmm_(1, -2, qf, gf.t())
-    distmat = distmat.cpu().numpy()
+    #distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
+    #          torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
+    #distmat.addmm_(1, -2, qf, gf.t())
+    #distmat = distmat.cpu().numpy()
+    
+    distmat = qf.mm(gf.t())
+    
     num_q, num_g = distmat.shape
     if num_g < max_rank:
         max_rank = num_g
@@ -489,21 +429,13 @@ def gumbel_softmax(logits, train, temperature = 0.8, hard=True):
         y = gumbel_softmax_sample(logits, temperature)
     shape = y.size()
     if train == True:
-        #p = np.random.random()
-        #if p < 0.002:
-         #   ind = torch.randint(0,100,[y.size(0), 1]).cuda()
         ind = torch.multinomial(y, 1)
         prob = y.gather(1, torch.tensor(ind))
-
-        #else:
-         #   prob, ind = y.max(dim=-1)
     else:
         prob, ind = y.max(dim=-1)
     y_hard = torch.zeros_like(y).view(-1, shape[-1])
     y_hard.scatter_(1, ind.view(-1, 1), 1)
-    #y_hard
     y_hard = y_hard.view(*shape)
-    # Set gradients w.r.t. y_hard gradients w.r.t. y
     y_hard = (y_hard - y).detach() + y
     return ind.view(b,h,-1), prob.view(b,h,-1), y_hard.view(b,h,-1)
 
@@ -534,6 +466,7 @@ class EncoderImagePrecompAttn(nn.Module):
 
         #if self.data_name == 'f30k_precomp':
         self.bn = nn.BatchNorm1d(embed_size)
+        self.bn.momentum = 0.01
 
     def init_weights(self):
         """Xavier initialization for the fully connected layer
@@ -626,22 +559,9 @@ class EncoderImagePrecompAttn(nn.Module):
         img_emb = torch.stack(image_all, 2)
         rnn_img, hidden_state = self.img_rnn(img_emb.transpose(2,1))
         features = img_emb.mean(2) + hidden_state.squeeze()
-        #features = hidden_state[0]
-        #if self.data_name == 'f30k_precomp':
-        #if train ==  False:
-          #  self.bn.training = True
-        #self.bn.track_running_stats = False
-        self.bn.momentum = 0.01
         if train == False:
             self.bn.training = True
-            #self.bn.track_running_stats = False
         features = self.bn(features)
-
-            # normalize in the joint embedding space
-        #if not self.no_imgnorm:
-        #    features = l2norm(features)
-        #features = l2norm(features)
-        # take the absolute value of embedding (used in order embeddings)
         if self.use_abs:
             features = torch.abs(features)
 
@@ -681,6 +601,7 @@ class EncoderText(nn.Module):
         # caption embedding
         self.rnn = nn.GRU(word_dim, embed_size, num_layers, batch_first=True)
         self.bn = nn.BatchNorm1d(embed_size)
+        self.bn.momentum = 0.01
         self.init_weights()
 
     def init_weights(self):
@@ -775,16 +696,9 @@ class EncoderText(nn.Module):
         out = torch.gather(padded[0], 1, I).squeeze(1)
 
         # normalization in the joint embedding space
-        #feature_end = img_emb.mean(2)
-
-
-        #feature_end = F.relu(self.fc_transform(feature_end))
 
         feature_end = out
-        self.bn.momentum = 0.01
-        if train ==  False:
-            self.bn.training = True
-            self.bn.track_running_stats = False
+
         feature_end = self.bn(feature_end)
 
 
@@ -932,7 +846,6 @@ class VSRN(object):
             cudnn.benchmark = True
         self.classifier1 = nn.Linear(2048, 512).cuda()
         self.classifier2 = nn.Linear(512, 113288).cuda()
-        #self.classifier = nn.Linear(512, 29783).cuda()
         self.linear1 = nn.Linear(opt.embed_size, 256).cuda()
         self.linear2 = nn.Linear(256, 1).cuda()
 
@@ -940,24 +853,7 @@ class VSRN(object):
         #####   captioning elements
         self.d_criterion = nn.BCELoss()
         self.rl_criterion = RewardCriterion()
-        '''
-        self.encoder = EncoderRNN(
-        opt.dim_vid,
-        opt.dim_hidden,
-        bidirectional=opt.bidirectional,
-        input_dropout_p=opt.input_dropout_p,
-        rnn_cell=opt.rnn_type,
-        rnn_dropout_p=opt.rnn_dropout_p)
-        self.decoder = DecoderRNN(
-        opt.vocab_size,
-        opt.max_len,
-        opt.dim_hidden,
-        opt.dim_word,
-        input_dropout_p=opt.input_dropout_p,
-        rnn_cell=opt.rnn_type,
-        rnn_dropout_p=opt.rnn_dropout_p,
-        bidirectional=opt.bidirectional)
-        '''
+   
         self.classify_criterion = CrossEntropyLabelSmooth(113288)
         self.caption_model = convcap(opt.vocab_size)
         self.crit = utils.LanguageModelCriterion()
@@ -965,7 +861,6 @@ class VSRN(object):
         self.rev_grad = RevGrad()
         if torch.cuda.is_available():
             self.caption_model.cuda()
-            #self.text_decoder.cuda()
         # Loss and Optimizer
         self.criterion = ContrastiveLoss(margin=opt.margin,
                                          measure=opt.measure,
@@ -979,17 +874,11 @@ class VSRN(object):
 
         params = list(self.txt_enc.parameters())
         params += list(self.img_enc.parameters())
-#        params += list(self.decoder.parameters())
-  #      params += list(self.encoder.parameters())
-     #   params += list(self.caption_model.parameters())
-        #params += list(self.text_decoder.parameters())
         params += list(self.classifier1.parameters())
         params += list(self.classifier2.parameters())
         params += list(self.linear1.parameters())
         params += list(self.linear2.parameters())
 
-
-       # params += list(self.img_enc.cnn.parameters())
         self.params = params
 
         self.optimizer = torch.optim.Adam(params, lr=opt.learning_rate)
@@ -1021,9 +910,6 @@ class VSRN(object):
     def calcualte_caption_loss(self, fc_feats, fc_feat, labels, masks):
         max_tokens = 61
         batchsize_cap = fc_feats.size(0)
-       # fc_feats = fc_feats.transpose(2, 1)
-        # labels = Variable(labels, volatile=False)
-        # masks = Variable(masks, volatile=False)
         torch.cuda.synchronize()
         labels = labels.cuda()
         seq_probs, _ = self.caption_model(fc_feats, fc_feat, labels, False)
@@ -1051,9 +937,7 @@ class VSRN(object):
         """
         self.img_enc.train()
         self.txt_enc.train()
-        #self.text_decoder.train()
-
-
+    
     def calculate_text_decoder_loss(self, text_embedding, captions, labels, masks):
         max_tokens = 61
         batchsize_cap = text_embedding.size(0)
@@ -1170,38 +1054,10 @@ class VSRN(object):
 
 
         classfication_loss = t_id + i_id
-    #    self.optimizer.zero_grad()
-    #    image_label = 1
-     #   text_label = 0
-   #     real_label = torch.full((img_emb.size(0),), image_label, dtype=torch.float).cuda()
-  #      fake_label = torch.full((img_emb.size(0),), text_label, dtype=torch.float).cuda()
-#        real_loss = self.d_criterion(self.discriminator(l2norm(img_emb)), real_label)
- #       fake_loss = self.d_criterion(self.discriminator(l2norm(cap_emb)), fake_label)
 
-        #discriminator_loss = real_loss + fake_loss
-
-        # calcualte captioning loss
-        self.optimizer.zero_grad()
-        #caption_loss = self.calcualte_caption_loss(GCN_img_emd, l2norm(img_emb), caption_labels, caption_masks)
-        #self.optimizer.zero_grad()
         text_decoder_loss = self.calculate_text_decoder_loss(l2norm(cap_emb),caption_labels, language, caption_masks)
         # measure accuracy and record loss
-
-        #retrieval_loss = self.forward_loss(img_emb_re, cap_emb_re)
-        self.optimizer.zero_grad()
         retrieval_loss2 = self.forward_loss(l2norm(img_emb), l2norm(cap_emb))
-
-        #grad_retreival = torch.autograd.grad((retrieval_loss+ classfication_loss).cpu(),  self.common_params,
-         #                             allow_unused=True, retain_graph =True)
-
-        #grad_caption = torch.autograd.grad((text_decoder_loss+caption_loss).cpu(), self.common_params,
-          #                                 allow_unused=True, retain_graph = True)
-
-
-
-        #sim = get_grad_cos_sim(grad_caption, grad_retreival).cpu().numpy()
-        #lamb = (sim+1)/2
-
 
         loss =  rl_loss1 + retrieval_loss2 + rl_loss2  + text_decoder_loss + classfication_loss
         loss.backward()
